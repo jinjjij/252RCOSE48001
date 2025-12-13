@@ -14,10 +14,11 @@ function parseBookId(raw: string): number | null {
 // 문제집 조회
 export async function GET(
     req : Request,
-    { params } : {params : {bookId : string}}
+    { params } : {params : Promise<{bookId : string}>}
 ){
+    const { bookId } = await params;
     try{
-        const id = parseBookId(params.bookId);
+        const id = parseBookId(bookId);
         if(!id){
             return NextResponse.json(
                 { ok : false, error : "INVAID_ID" },
@@ -157,9 +158,10 @@ export async function GET(
 
 
 // 문제집 수정
-export async function PATCH(req: Request, { params }: { params: { bookId: string } }){
+export async function PATCH(req: Request, { params }: { params: Promise<{ bookId: string }> }){
+    const { bookId } = await params;
     try{
-        const id = parseBookId(params.bookId);
+        const id = parseBookId(bookId);
         if(!id){
             return NextResponse.json({ ok:false, error: "INVALID_ID" }, { status: 401 });
         }
@@ -259,9 +261,10 @@ export async function PATCH(req: Request, { params }: { params: { bookId: string
 
 
 // 문제집 삭제
-export async function DELETE(req: Request, { params }: { params: { bookId: string } }){
+export async function DELETE(req: Request, { params }: { params: Promise<{ bookId: string }> }){
+    const { bookId } = await params;
     try{
-        const id = parseBookId(params.bookId);
+        const id = parseBookId(bookId);
         if(!id){
             return NextResponse.json({ ok:false, error: "INVALID_ID" }, { status: 401 });
         }

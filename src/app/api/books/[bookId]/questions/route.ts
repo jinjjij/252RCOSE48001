@@ -21,9 +21,10 @@ function isQuestionType(v: any): v is "MCQ" | "SHORT" {
  * - Accepts single or bulk in items[]
  * - insert.position currently supports "end" (append to the book)
  */
-export async function POST(req: Request, { params }: { params: { bookId: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ bookId: string }> }) {
+  const { bookId } = await params;
   try {
-    const id = parseBookId(params.bookId);
+    const id = parseBookId(bookId);
     if (!id) return NextResponse.json({ ok: false, error: "INVALID_ID" }, { status: 401 });
 
     const user = await getCurrentUser();
@@ -94,7 +95,7 @@ export async function POST(req: Request, { params }: { params: { bookId: string 
     // We'll create sequentially in a transaction to guarantee order indices
     const createdRows = [] as any[];
 
-    const transaction = await db.$transaction(async (prisma) => {
+    const transaction = await db.$transaction(async (prisma: any) => {
       for (const it of items) {
         const createdRow = await prisma.question.create({
           data: {
@@ -132,9 +133,10 @@ export async function POST(req: Request, { params }: { params: { bookId: string 
  * GET /api/books/:bookId/questions
  * Returns the list of all questions for the book ordered by orderIndex ASC
  */
-export async function GET(req: Request, { params }: { params: { bookId: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ bookId: string }> }) {
+  const { bookId } = await params;
   try {
-    const id = parseBookId(params.bookId);
+    const id = parseBookId(bookId);
     if (!id) return NextResponse.json({ ok: false, error: "INVALID_ID" }, { status: 401 });
 
     const user = await getCurrentUser();

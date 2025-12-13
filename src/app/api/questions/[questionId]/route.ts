@@ -16,9 +16,10 @@ function isQuestionType(v: any): v is "MCQ" | "SHORT" {
 
 
 // GET /api/questions/:questionId
-export async function GET(req: Request, { params }: { params: { questionId: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ questionId: string }> }) {
+  const { questionId } = await params;
   try {
-    const id = parseQuestionId(params.questionId);
+    const id = parseQuestionId(questionId);
     if (!id) return NextResponse.json({ ok: false, error: "INVALID_ID" }, { status: 401 });
 
     const user = await getCurrentUser();
@@ -61,9 +62,10 @@ export async function GET(req: Request, { params }: { params: { questionId: stri
 
 
 // PATCH /api/questions/:questionId
-export async function PATCH(req: Request, { params }: { params: { questionId: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ questionId: string }> }) {
+  const { questionId } = await params;
   try {
-    const id = parseQuestionId(params.questionId);
+    const id = parseQuestionId(questionId);
     if (!id) return NextResponse.json({ ok: false, error: "INVALID_ID" }, { status: 401 });
 
     const user = await getCurrentUser();
@@ -139,9 +141,10 @@ export async function PATCH(req: Request, { params }: { params: { questionId: st
 
 
 // DELETE /api/questions/:questionId
-export async function DELETE(req: Request, { params }: { params: { questionId: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ questionId: string }> }) {
+  const { questionId } = await params;
   try {
-    const id = parseQuestionId(params.questionId);
+    const id = parseQuestionId(questionId);
     if (!id) return NextResponse.json({ ok: false, error: "INVALID_ID" }, { status: 401 });
 
     const user = await getCurrentUser();
