@@ -10,9 +10,14 @@
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
-    "next": "15.5.3",
+    "bcryptjs": "^3.0.2",
+    "nanoid": "^5.1.6",
+    "next": "^15.5.7",
+    "openai": "^6.10.0",
+    "pdfjs-dist": "^5.4.449",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
