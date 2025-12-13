@@ -10,9 +10,10 @@ function parseBookId(raw: string): number | null {
 }
 
 
-export async function POST(req: Request, { params }: { params: { bookId: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ bookId: string }> }) {
+  const { bookId } = await params;
   try {
-    const id = parseBookId(params.bookId);
+    const id = parseBookId(bookId);
     if (!id) return NextResponse.json({ ok: false, error: "INVALID_ID" }, { status: 401 });
 
     const user = await getCurrentUser();
@@ -38,9 +39,10 @@ export async function POST(req: Request, { params }: { params: { bookId: string 
 }
 
 
-export async function DELETE(req: Request, { params }: { params: { bookId: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ bookId: string }> }) {
+  const { bookId } = await params;
   try {
-    const id = parseBookId(params.bookId);
+    const id = parseBookId(bookId);
     if (!id) return NextResponse.json({ ok: false, error: "INVALID_ID" }, { status: 401 });
 
     const user = await getCurrentUser();
