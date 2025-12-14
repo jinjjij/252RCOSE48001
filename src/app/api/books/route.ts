@@ -88,18 +88,32 @@ export async function POST(req : Request){
 
 
     try{
-        const newBook = await db.book.create({
-            data : {
-                authorId,
-                title, 
-                description, 
-                bookCode, 
-                visibility: visibility ?? "PRIVATE",
-            },
-            select : {authorId: true, bookCode: true}
+        // 문제집 생성 및 라이브러리에 자동 추가 (트랜잭션)
+        const result = await db.$transaction(async (tx) => {
+            // 문제집 생성
+            const newBook = await tx.book.create({
+                data : {
+                    authorId,
+                    title, 
+                    description, 
+                    bookCode, 
+                    visibility: visibility ?? "PRIVATE",
+                },
+                select : {id: true, authorId: true, bookCode: true, title: true}
+            });
+
+            // 생성자의 라이브러리에 자동 추가
+            await tx.userLibrary.create({
+                data: {
+                    userId: authorId,
+                    bookId: newBook.id
+                }
+            });
+
+            return newBook;
         });
 
-        return NextResponse.json({newBook}, {status : 201});
+        return NextResponse.json({newBook: result}, {status : 201});
     }
     catch(err : any){
         console.error("Unexpected DB error", err);
@@ -152,11 +166,17 @@ export async function GET(req: Request){
                 sortField = sort;
         }
 
-        // visibility handling: public or owned private
+        // visibility handling: admin can see all, others see public or owned private
         const user = await getCurrentUser();
-        const visibilityFilter: any = user
+        const visibilityFilter: any = user?.isAdmin
+            ? {} // admin은 모든 문제집 볼 수 있음
+            : user
             ? { OR: [{ visibility: "PUBLIC" }, { authorId: user.id }] }
             : { visibility: "PUBLIC" };
+
+        console.log("[Books API] Search query:", q);
+        console.log("[Books API] Current user:", user?.id, "isAdmin:", user?.isAdmin);
+        console.log("[Books API] Visibility filter:", JSON.stringify(visibilityFilter));
 
         // function to build cursor where clause
         function buildCursorWhere(parsedCursor: any, orderDir: string) {
@@ -233,6 +253,7 @@ export async function GET(req: Request){
                     },
                 ],
             };
+            console.log("[Books API] Text search where clause:", JSON.stringify(where, null, 2));
         }
 
         // apply cursor if present (to the pagination query only)
@@ -273,11 +294,25 @@ export async function GET(req: Request){
             },
         });
 
+        console.log("[Books API] Found", rows.length, "books");
+        if (rows.length > 0) {
+            console.log("[Books API] First result:", { id: rows[0].id, title: rows[0].title, visibility: rows[0].visibility, authorId: rows[0].authorId });
+        }
+
         const hasNext = rows.length > pageSize;
         const items = hasNext ? rows.slice(0, pageSize) : rows;
 
+        // If no results, return empty array instead of 404
         if (!items.length) {
-            return NextResponse.json({ ok: false, error: "BOOK_NOT_FOUND" }, { status: 404 });
+            return NextResponse.json({ 
+                ok: true, 
+                data: { 
+                    matchType, 
+                    items: [], 
+                    pageInfo: { limit: pageSize, hasNext: false, nextCursor: null }, 
+                    summary: { count: 0, total: 0 } 
+                } 
+            }, { status: 200 });
         }
 
         // build next cursor
