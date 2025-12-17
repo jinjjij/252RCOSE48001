@@ -133,6 +133,8 @@ export async function POST(request: Request) {
 		const model = process.env.OPENAI_MODEL || "gpt-5-mini";
 		const timeoutMs = parseTimeoutMs(process.env.OPENAI_TIMEOUT_MS, 45000);
 		const maxAttempts = 3;
+		// 일부 모델(예: gpt-5 계열)은 temperature를 기본값(1)만 지원
+		const temperature = model.startsWith("gpt-5") ? 1 : 0.2;
 
 		const baseRule = `다음 조건을 만족하는 ${questionCount}개의 객관식 문제를 생성하세요. 각 문제는 JSON 형식으로 {question: string, choices: [{id: string, text: string}], answer: {id: string}}이어야 합니다. 응답은 JSON 배열로만 하세요.`;
 
@@ -219,7 +221,7 @@ export async function POST(request: Request) {
 					messages: [{ role: "user", content: batchPrompt }],
 					tools,
 					tool_choice: { type: "function", function: { name: "return_questions" } },
-					temperature: 0.2,
+					temperature,
 					max_completion_tokens: maxTokens,
 				},
 				{ timeoutMs, maxAttempts }
