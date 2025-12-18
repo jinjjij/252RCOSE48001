@@ -5,6 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import styles from "../../main/main.module.css";
 
+function formatElapsed(seconds: number): string {
+	const s = Math.max(0, Math.floor(seconds));
+	const mm = String(Math.floor(s / 60)).padStart(2, "0");
+	const ss = String(s % 60).padStart(2, "0");
+	return `${mm}:${ss}`;
+}
+
 interface Question {
 	id: number;
 	orderIndex?: number;
@@ -55,6 +62,17 @@ export default function BookPage() {
 	const [addMessage, setAddMessage] = useState("");
 	const [addFile, setAddFile] = useState<File | null>(null);
 	const [addingQuestions, setAddingQuestions] = useState(false);
+	const [addElapsedSec, setAddElapsedSec] = useState(0);
+
+	useEffect(() => {
+		if (!addingQuestions) return;
+		const start = Date.now();
+		setAddElapsedSec(0);
+		const id = setInterval(() => {
+			setAddElapsedSec(Math.floor((Date.now() - start) / 1000));
+		}, 500);
+		return () => clearInterval(id);
+	}, [addingQuestions]);
 
 	const fetchData = async () => {
 		if (!bookId) return;
@@ -193,7 +211,15 @@ export default function BookPage() {
 		}
 
 		setAddingQuestions(true);
+		const startedAt = Date.now();
 		try {
+			console.log("[AI] create questions: request start", {
+				bookId,
+				questionCount: addQuestionCount,
+				messageChars: addMessage.length,
+				file: addFile ? { name: addFile.name, size: addFile.size, type: addFile.type } : null,
+			});
+
 			const form = new FormData();
 			if (addFile) form.append("file", addFile);
 			form.append("questionCount", String(addQuestionCount));
@@ -201,6 +227,11 @@ export default function BookPage() {
 
 			const queryRes = await fetch("/api/ai/query", { method: "POST", body: form });
 			const queryJson = await queryRes.json().catch(() => null);
+			console.log("[AI] create questions: response", {
+				ok: queryRes.ok && Boolean(queryJson?.ok),
+				status: queryRes.status,
+				elapsedMs: Date.now() - startedAt,
+			});
 			if (!queryRes.ok || !queryJson?.ok) {
 				alert("문제 생성에 실패했습니다.");
 				return;
@@ -462,7 +493,14 @@ export default function BookPage() {
 						onClick={(e) => e.stopPropagation()}
 					>
 						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-md)" }}>
-							<div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>문제 추가</div>
+							<div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+								<div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>문제 추가</div>
+								{addingQuestions ? (
+									<div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+										생성 중... 경과 {formatElapsed(addElapsedSec)}
+									</div>
+								) : null}
+							</div>
 							<button
 								type="button"
 								className={styles.clearButton}

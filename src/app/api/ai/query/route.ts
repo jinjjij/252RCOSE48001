@@ -70,6 +70,13 @@ function normalizeExtractedText(text: string): string {
 		.trim();
 }
 
+function estimateTokens(text: string): number {
+	// Rough heuristic for logging only (not billing-accurate).
+	// English tends to be ~4 chars/token; CJK can be denser, but this is good enough for debugging trends.
+	const chars = (text || "").length;
+	return Math.max(1, Math.ceil(chars / 4));
+}
+
 function extractJsonArray(text: string): unknown {
 	const cleaned = stripCodeFences(text);
 	try {
@@ -104,6 +111,7 @@ async function readTextFromUploadedFile(file: File): Promise<string> {
 }
 
 export async function POST(request: Request) {
+	const totalStart = Date.now();
 	try {
 		const formData = await request.formData();
 		const file = (formData.get("file") ?? formData.get("pdf")) as File | null;
@@ -136,6 +144,14 @@ export async function POST(request: Request) {
 		// 일부 모델(예: gpt-5 계열)은 temperature를 기본값(1)만 지원
 		const temperature = model.startsWith("gpt-5") ? 1 : 0.2;
 
+		console.log("[AI] /api/ai/query start", {
+			model,
+			questionCount,
+			hasFile: Boolean(file),
+			messageChars: message.length,
+			textChars: textContent.length,
+		});
+
 		const baseRule = `다음 조건을 만족하는 ${questionCount}개의 객관식 문제를 생성하세요. 각 문제는 JSON 형식으로 {question: string, choices: [{id: string, text: string}], answer: {id: string}}이어야 합니다. 응답은 JSON 배열로만 하세요.`;
 
 		const prompt = file
@@ -156,6 +172,7 @@ export async function POST(request: Request) {
 		const aggregated: { type: "MCQ"; question: unknown; choices: unknown; answer: unknown }[] = [];
 
 		for (const batchCount of batches) {
+			const batchStart = Date.now();
 			// Increase output budget vs. previous fixed 2000 to reduce truncation/invalid JSON.
 			const maxTokens = Math.max(1200, Math.min(6000, batchCount * 500));
 
@@ -214,6 +231,15 @@ export async function POST(request: Request) {
 				? `${trimmedMessage ? `추가 지시사항: ${trimmedMessage}\n\n` : ""}${baseRule}\n\n텍스트: ${textContent}`
 				: `${baseRule}\n\n주제/요구사항: ${trimmedMessage}`;
 
+			console.log("[AI] openai request", {
+				model,
+				batchCount,
+				promptChars: batchPrompt.length,
+				estPromptTokens: estimateTokens(batchPrompt),
+				max_completion_tokens: maxTokens,
+				temperature,
+			});
+
 			const response = await createChatCompletionWithRetry(
 				openai,
 				{
@@ -226,6 +252,13 @@ export async function POST(request: Request) {
 				},
 				{ timeoutMs, maxAttempts }
 			);
+
+			console.log("[AI] openai response", {
+				model,
+				batchCount,
+				elapsedMs: Date.now() - batchStart,
+				usage: (response as any)?.usage ?? null,
+			});
 
 			let rawItems: unknown = null;
 			const toolCall = response.choices[0]?.message?.tool_calls?.[0];
@@ -258,13 +291,16 @@ export async function POST(request: Request) {
 			aggregated.push(...items);
 		}
 
+		console.log("[AI] /api/ai/query end", { ok: true, elapsedMs: Date.now() - totalStart });
 		return NextResponse.json({ ok: true, data: { items: aggregated.slice(0, questionCount) } }, { status: 200 });
 	} catch (error) {
 		const anyErr = error as any;
 		if (anyErr?.name === "AbortError") {
+			console.log("[AI] /api/ai/query end", { ok: false, reason: "timeout", elapsedMs: Date.now() - totalStart });
 			return NextResponse.json({ ok: false, error: "OPENAI_TIMEOUT" }, { status: 504 });
 		}
 		console.error(error);
+		console.log("[AI] /api/ai/query end", { ok: false, reason: "error", elapsedMs: Date.now() - totalStart });
 		return NextResponse.json({ ok: false, error: "INTERNAL_ERROR" }, { status: 500 });
 	}
 }
